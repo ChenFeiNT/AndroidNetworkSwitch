@@ -1,10 +1,12 @@
 package com.test.network;
 
+import android.annotation.TargetApi;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.telephony.TelephonyManager;
 
 import java.lang.reflect.InvocationTargetException;
@@ -93,17 +95,29 @@ public class NetworkUtil{
      * @return true 连接 false 未连接
      */
     public static boolean getMobileDataState(Context pContext, Object[] arg) {
+        Boolean isOpen = false;
         try {
-            ConnectivityManager mConnectivityManager = (ConnectivityManager) pContext.getSystemService(Context.CONNECTIVITY_SERVICE);
-            Class ownerClass = mConnectivityManager.getClass();
-            Class[] argsClass = null;
-            if (arg != null) {
-                argsClass = new Class[1];
-                argsClass[0] = arg.getClass();
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                //andriod 5.0 （API 21）以下  通过此反射方法获取移动网络状态
+                ConnectivityManager mConnectivityManager = (ConnectivityManager) pContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+                Class ownerClass = mConnectivityManager.getClass();
+                Class[] argsClass = null;
+                if (arg != null) {
+                    argsClass = new Class[1];
+                    argsClass[0] = arg.getClass();
+                }
+                Method method = ownerClass.getMethod("getMobileDataEnabled", argsClass);
+                isOpen = (Boolean) method.invoke(mConnectivityManager, arg);
+                return isOpen;
+            } else {
+                //andriod 5.0 （API 21）以上  通过此反射方法获取移动网络状态
+                TelephonyManager telephonyService = (TelephonyManager) pContext.getSystemService(Context.TELEPHONY_SERVICE);
+                Method getMobileDataEnabledMethod = telephonyService.getClass().getDeclaredMethod("getDataEnabled");
+                if (null != getMobileDataEnabledMethod){
+                    isOpen = (Boolean) getMobileDataEnabledMethod.invoke(telephonyService);
+                }
+                return isOpen;
             }
-            Method method = ownerClass.getMethod("getMobileDataEnabled", argsClass);
-            Boolean isOpen = (Boolean) method.invoke(mConnectivityManager, arg);
-            return isOpen;
         } catch (Exception e) {
             System.out.println("得到移动数据状态出错");
             return false;
@@ -114,14 +128,23 @@ public class NetworkUtil{
      * 打开或关闭手机的移动数据
      */
     public static void setMobileData(Context pContext, boolean pBoolean) {
-
         try {
-            ConnectivityManager mConnectivityManager = (ConnectivityManager) pContext.getSystemService(Context.CONNECTIVITY_SERVICE);
-            Class ownerClass = mConnectivityManager.getClass();
-            Class[] argsClass = new Class[1];
-            argsClass[0] = boolean.class;
-            Method method = ownerClass.getMethod("setMobileDataEnabled", argsClass);
-            method.invoke(mConnectivityManager, pBoolean);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                //andriod 5.0 （API 21）以下  通过此方法打开或关闭移动网络
+                ConnectivityManager mConnectivityManager = (ConnectivityManager) pContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+                Class ownerClass = mConnectivityManager.getClass();
+                Class[] argsClass = new Class[1];
+                argsClass[0] = boolean.class;
+                Method method = ownerClass.getMethod("setMobileDataEnabled", argsClass);
+                method.invoke(mConnectivityManager, pBoolean);
+            }else{
+                //andriod 5.0 （API 21）以上  通过此方法打开或关闭移动网络
+                TelephonyManager telephonyService = (TelephonyManager) pContext.getSystemService(Context.TELEPHONY_SERVICE);
+                Method setMobileDataEnabledMethod = telephonyService.getClass().getDeclaredMethod("setDataEnabled", boolean.class);
+                if (null != setMobileDataEnabledMethod)                {
+                    setMobileDataEnabledMethod.invoke(telephonyService, pBoolean);
+                }
+            }
         } catch (Exception e) {
             // TODO Auto-generated catch block
             e.printStackTrace();

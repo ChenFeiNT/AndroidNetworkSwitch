@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.test.network">
+    package="com.test.network"
+    >
 
     <!--访问网络状态权限-->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
@@ -11,6 +12,8 @@
     <!--修改wifi状态权限-->
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE"/>
 
     <application
         android:allowBackup="true"
