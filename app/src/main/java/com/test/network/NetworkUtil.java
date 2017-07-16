@@ -8,6 +8,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.telephony.TelephonyManager;
+import android.util.Log;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -77,7 +78,8 @@ public class NetworkUtil{
         return netWorkType;
     }
 
-    //设置网络优先级
+
+    //设置网络优先级，api 21 之前有效
     public static void setPreferredNetwork(Context context, int networkType) {
         ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
 
@@ -126,6 +128,8 @@ public class NetworkUtil{
 
     /**
      * 打开或关闭手机的移动数据
+     * 此方法只使用于 andriod 5.0（API 21）以下
+     * andriod 5.0（API 21）以上需要系统权限才可打开移动网络
      */
     public static void setMobileData(Context pContext, boolean pBoolean) {
         try {
@@ -137,13 +141,6 @@ public class NetworkUtil{
                 argsClass[0] = boolean.class;
                 Method method = ownerClass.getMethod("setMobileDataEnabled", argsClass);
                 method.invoke(mConnectivityManager, pBoolean);
-            }else{
-                //andriod 5.0 （API 21）以上  通过此方法打开或关闭移动网络
-                TelephonyManager telephonyService = (TelephonyManager) pContext.getSystemService(Context.TELEPHONY_SERVICE);
-                Method setMobileDataEnabledMethod = telephonyService.getClass().getDeclaredMethod("setDataEnabled", boolean.class);
-                if (null != setMobileDataEnabledMethod)                {
-                    setMobileDataEnabledMethod.invoke(telephonyService, pBoolean);
-                }
             }
         } catch (Exception e) {
             // TODO Auto-generated catch block
@@ -170,25 +167,53 @@ public class NetworkUtil{
         return false;
     }
 
-    //通过反射的方式去判断wifi是否已经连接上，并且可以开始传输数据
-    private boolean checkWiFiConnectSuccess() {
-        Class classType = WifiInfo.class;
-        try {
-            Object invo = classType.newInstance();
-            Object result = invo.getClass().getMethod("getMeteredHint").invoke(invo);
-            return (boolean) result;
-        } catch (InstantiationException e) {
-            e.printStackTrace();
-            return false;
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-            return false;
-        } catch (NoSuchMethodException e) {
-            e.printStackTrace();
-            return false;
-        } catch (InvocationTargetException e) {
-            e.printStackTrace();
-            return false;
+    /*
+     * 判断当前wifi或移动网络可用
+     * Mobile == 0
+     * wifi   == 1
+     * others == -1
+     */
+    public static int wifiOrMobileConnected (Context context) {
+
+        ConnectivityManager manager = (ConnectivityManager) context
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        NetworkInfo activeNetwork = manager.getActiveNetworkInfo();
+        if (activeNetwork != null) { // connected to the internet
+            if (activeNetwork.isConnected()) {
+                if (activeNetwork.getType() == ConnectivityManager.TYPE_WIFI) {
+                    // connected to wifi  // 当前WiFi连接可用
+                    return ConnectivityManager.TYPE_WIFI;
+                } else if (activeNetwork.getType() == ConnectivityManager.TYPE_MOBILE) {
+                    // connected to the mobile provider's data plan  // 当前移动网络连接可用
+                    return ConnectivityManager.TYPE_MOBILE;
+                }
+            } else {
+                //当前没有网络连接，请确保你已经打开网络
+                return -1;
+            }
+        } else {   // not connected to the internet
+            //当前没有网络连接，请确保你已经打开网络
+            return -1;
         }
+        return -1;
+    }
+
+    /**
+     * 判断 移动网络 是否被打开
+     * @param context
+     * @return false 未打开 true 打开
+     */
+    public static boolean isMobileEnabled(Context context) {
+        try {
+            ConnectivityManager mConnectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+            Method getMobileDataEnabledMethod = ConnectivityManager.class.getDeclaredMethod("getMobileDataEnabled");
+            getMobileDataEnabledMethod.setAccessible(true);
+            return (Boolean) getMobileDataEnabledMethod.invoke(mConnectivityManager);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        // 反射失败，默认开启
+        return true;
     }
 }
