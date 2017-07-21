@@ -1,17 +1,30 @@
 package com.test.network;
 
-import android.annotation.TargetApi;
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
+import android.net.NetworkRequest;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Looper;
+import android.support.annotation.RequiresApi;
 import android.telephony.TelephonyManager;
-import android.util.Log;
+import android.widget.Toast;
 
-import java.lang.reflect.InvocationTargetException;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Method;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
+
+import static android.content.Context.WIFI_SERVICE;
 
 /**
  * Created by softwise on 2017/7/11.
@@ -154,12 +167,24 @@ public class NetworkUtil{
         Context context = inContext.getApplicationContext();
         ConnectivityManager connectivity = (ConnectivityManager) context
                 .getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (connectivity != null) {
-            NetworkInfo[] info = connectivity.getAllNetworkInfo();
-            if (info != null) {
-                for (int i = 0; i < info.length; i++) {
-                    if (info[i].getTypeName().equals("WIFI") && info[i].isConnected()) {
-                        return true;
+        //getAllNetworkInfo 在23被舍弃，getNetworkInfo 在21被加入
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Network[] networks = connectivity.getAllNetworks();
+            NetworkInfo networkInfo;
+            for (Network mNetwork : networks) {
+                networkInfo = connectivity.getNetworkInfo(mNetwork);
+                if (networkInfo.getTypeName().equals("WIFI") && networkInfo.getState().equals(NetworkInfo.State.CONNECTED)) {
+                    return true;
+                }
+            }
+        }else {
+            if (connectivity != null) {
+                NetworkInfo[] info = connectivity.getAllNetworkInfo();
+                if (info != null) {
+                    for (int i = 0; i < info.length; i++) {
+                        if (info[i].getTypeName().equals("WIFI") && info[i].isConnected()) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -167,37 +192,28 @@ public class NetworkUtil{
         return false;
     }
 
-    /*
-     * 判断当前wifi或移动网络可用
-     * Mobile == 0
-     * wifi   == 1
-     * others == -1
-     */
-    public static int wifiOrMobileConnected (Context context) {
 
-        ConnectivityManager manager = (ConnectivityManager) context
-                .getSystemService(Context.CONNECTIVITY_SERVICE);
 
-        NetworkInfo activeNetwork = manager.getActiveNetworkInfo();
-        if (activeNetwork != null) { // connected to the internet
-            if (activeNetwork.isConnected()) {
-                if (activeNetwork.getType() == ConnectivityManager.TYPE_WIFI) {
-                    // connected to wifi  // 当前WiFi连接可用
-                    return ConnectivityManager.TYPE_WIFI;
-                } else if (activeNetwork.getType() == ConnectivityManager.TYPE_MOBILE) {
-                    // connected to the mobile provider's data plan  // 当前移动网络连接可用
-                    return ConnectivityManager.TYPE_MOBILE;
-                }
-            } else {
-                //当前没有网络连接，请确保你已经打开网络
-                return -1;
-            }
-        } else {   // not connected to the internet
-            //当前没有网络连接，请确保你已经打开网络
-            return -1;
-        }
-        return -1;
+    //判断当前网络是否连接
+    public static boolean isNetworkConnected(Context context) {
+        ConnectivityManager connMgr = (ConnectivityManager)
+                context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+        return (networkInfo != null && networkInfo.isConnected());
     }
+    //判断当前网络是否连接外网
+    public static boolean isNetworkOnline() {
+        Runtime runtime = Runtime.getRuntime();
+        try {
+            Process ipProcess = runtime.exec("ping -c 1 114.114.114.114");
+            int exitValue = ipProcess.waitFor();
+            return (exitValue == 0);
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
 
     /**
      * 判断 移动网络 是否被打开
@@ -215,5 +231,279 @@ public class NetworkUtil{
         }
         // 反射失败，默认开启
         return true;
+    }
+
+    //      判断是否连接指定WIFI
+    public static boolean isConnectedDesignatedWifi(Context inContext,String designatedWifi){
+        WifiManager mWifiManager = (WifiManager) inContext.getSystemService(WIFI_SERVICE);
+        WifiInfo wifiInfo = mWifiManager.getConnectionInfo();
+
+        if (wifiInfo.getSSID().toString().equals("\""+designatedWifi+"\"")){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+
+    //5.0以上WIFI和4G同开，WIFI连通，强行使用4G的方法（请求级别）
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static void   useMobileNetwork(final Context context){
+
+        ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE);
+
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build();
+
+        connectivityManager.requestNetwork(request, new ConnectivityManager.NetworkCallback(){
+            /**
+             * Called when the framework connects and has declared a new network ready for use.
+             * This callback may be called more than once if the {@link Network} that is
+             * satisfying the request changes.
+             *
+             * This method will be called on non-UI thread, so beware not to use any UI updates directly.
+             *
+             * @param network The {@link Network} of the satisfying network.
+             */
+            @Override
+            public void onAvailable(final Network network){
+                //super.onAvailable(network);
+
+//                try{
+//                    final InetAddress address = network.getByName("baidu.com");
+//                    System.out.print("Resolved host2ip: " + address.getHostName() + " -> " +  address.getHostAddress());
+//                }catch (UnknownHostException e){
+//                    e.printStackTrace();
+//                }
+
+//                try {
+//                    HttpURLConnection urlConnection =  (HttpURLConnection) network.openConnection(
+//                            new URL("http://www.baidu.com/s?wd=123"));
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
+
+                //第一种做法
+                try {
+                    URL url = new URL("http://php.weather.sina.com.cn/iframe/index/w_cl.php?code=js&day=0&city=&dfc=1&charset=utf-8");
+                    URLConnection uRLConnection = network.openConnection(url);          //openURLConnection();
+                    InputStream in = uRLConnection.getInputStream();
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[1024];
+                    int len = 0;
+                    while ((len = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, len);
+                    }
+                    String a = new String(out.toByteArray());
+                    out.close();
+                    in.close();
+                    showToast(a,context);
+                }catch (Exception e){
+                    showToast(e.toString(),context);
+                    e.toString();
+                }
+
+                //第二种做法,此方法暂时无效
+////                if(okHttpClient == null)
+////                {final OkHttpClient okHttpClient = null;
+//                OkHttpClient  okHttpClient = new OkHttpClient.Builder().socketFactory(network.getSocketFactory()).build();
+////                }
+//
+//                Request request = new Request.Builder()
+//                        .url("https://www.baidu.com/")
+//                        .build();
+//                try (Response response = okHttpClient.newCall(request).execute())
+//                {
+//                    Toast.makeText(context, response.body().string(), Toast.LENGTH_LONG).show();
+//                    System.out.print("RESULT:\n" + response.body().string());
+//                }
+//                catch (Exception ex)
+//                {
+//                    Toast.makeText(context, ex.toString(), Toast.LENGTH_LONG).show();
+//                    ex.printStackTrace();
+//                }
+            }
+        });
+    }
+
+    //5.0以上WIFI和4G同开，WIFI连通，强行使用4G的方法（应用级别）
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static void   appUseMobileNetwork(final Context context, final String strURL){
+
+        final ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE);
+
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build();
+
+        connectivityManager.requestNetwork(request, new ConnectivityManager.NetworkCallback(){
+            @Override
+            public void onUnavailable() {
+                //super.onUnavailable();
+                showToast("应用级强行使用4G设置失败",context);
+            }
+
+            @Override
+            public void onAvailable(final Network network) {
+                //super.onAvailable(network);
+
+                // 可以通过下面代码将app接下来的请求都绑定到这个网络下请求
+                if (Build.VERSION.SDK_INT >= 23) {
+                  if( connectivityManager.bindProcessToNetwork(network)){
+                        showToast("应用级强行使用移动网络设置成功",context);
+                    }else{
+                        showToast("应用级强行使用移动网络设置失败",context);
+                    }
+                } else {
+                    // 23后这个方法舍弃了
+                    if(ConnectivityManager.setProcessDefaultNetwork(network)){
+                        showToast("应用级强行使用移动网络设置成功",context);
+                    }else{
+                        showToast("应用级强行使用移动网络设置失败",context);
+
+                    }
+                }
+               //showToast("应用级强行使用4G设置成功",context);
+                // 也可以在将来某个时间取消这个绑定网络的设置
+                // if (Build.VERSION.SDK_INT >= 23) {
+                //      onnectivityManager.bindProcessToNetwork(null);
+                //} else {
+                //     ConnectivityManager.setProcessDefaultNetwork(null);
+                //}
+                // 只要一找到符合条件的网络就注销本callback
+                // 你也可以自己进行定义注销的条件
+                //connectivityManager.unregisterNetworkCallback(this);
+            }
+        });
+        showToast("未知错误",context);
+        //connectivityManager.requestNetwork(request, callback);
+    }
+
+    //5.0以上WIFI和4G同开，WIFI连通，强行使用WIFI的方法（应用级别）
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static void   appUseWifiNetwork(final Context context, final String strURL){
+
+        final ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE);
+
+        NetworkRequest request = new NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build();
+
+        connectivityManager.requestNetwork(request, new ConnectivityManager.NetworkCallback(){
+
+            @Override
+            public void onUnavailable() {
+                //super.onUnavailable();
+                showToast("应用级强行使用WIFI设置失败",context);
+            }
+            @Override
+            public void onAvailable(final Network network) {
+                //super.onAvailable(network);
+
+                // 可以通过下面代码将app接下来的请求都绑定到这个网络下请求
+                if (Build.VERSION.SDK_INT >= 23) {
+                    if(connectivityManager.bindProcessToNetwork(network)){
+                        showToast("应用级强行使用WIFI设置成功",context);
+                    }else{
+                        showToast("应用级强行使用WIFI设置失败",context);
+                    }
+                } else {
+                    // 23后这个方法舍弃了
+                    if(ConnectivityManager.setProcessDefaultNetwork(network)){
+                        showToast("应用级强行使用WIFI设置成功",context);
+                    }else{
+                        showToast("应用级强行使用WIFI设置失败",context);
+                    }
+                }
+               // executeHttpGet(context,strURL);
+
+                // 也可以在将来某个时间取消这个绑定网络的设置
+                // if (Build.VERSION.SDK_INT >= 23) {
+                //      onnectivityManager.bindProcessToNetwork(null);
+                //} else {
+                //     ConnectivityManager.setProcessDefaultNetwork(null);
+                //}
+                // 只要一找到符合条件的网络就注销本callback
+                // 你也可以自己进行定义注销的条件
+                //connectivityManager.unregisterNetworkCallback(this);
+            }
+        });
+        showToast("未知错误",context);
+        //connectivityManager.requestNetwork(request, callback);
+    }
+
+    //显示Toast
+    public static void showToast(final String msg, final Context context){
+        new Thread(){
+            public void run(){
+                Looper.prepare();//给当前线程初始化Looper
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show();;//Toast初始化的时候会new Handler();无参构造默认获取当前线程的Looper，如果没有prepare过，则抛出题主描述的异常。上一句代码初始化过了，就不会出错。
+                Looper.loop();//这句执行，Toast排队show所依赖的Handler发出的消息就有人处理了，Toast就可以吐出来了。但是，这个Thread也阻塞这里了，因为loop()是个for (;;) ...
+            }
+        }.start();
+    }
+
+
+    public static void executeHttpGet(Context context) {
+        String result = null;
+        URL url = null;
+        HttpURLConnection connection = null;
+        InputStreamReader in = null;
+        try {
+            url = new URL("http://php.weather.sina.com.cn/iframe/index/w_cl.php?code=js&day=0&city=&dfc=1&charset=utf-8");
+            connection = (HttpURLConnection) url.openConnection();
+            in = new InputStreamReader(connection.getInputStream());
+            BufferedReader bufferedReader = new BufferedReader(in);
+            StringBuffer strBuffer = new StringBuffer();
+            String line = null;
+            while ((line = bufferedReader.readLine()) != null) {
+                strBuffer.append(line);
+            }
+            result = strBuffer.toString();
+            showToast(result,context);
+
+        } catch (Exception e) {
+            showToast(e.toString(),context);
+            e.printStackTrace();
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    showToast(e.toString(),context);
+                }
+            }
+        }
+      //  return result;
+    }
+
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    public static void requestWithNetwork(Context context){
+        ConnectivityManager connectivityManager = (ConnectivityManager)context.getSystemService(MainActivity.CONNECTIVITY_SERVICE);
+        Network network = (Network)connectivityManager.getBoundNetworkForProcess();
+        try {
+            URL url = new URL("http://php.weather.sina.com.cn/iframe/index/w_cl.php?code=js&day=0&city=&dfc=1&charset=utf-8");
+            URLConnection uRLConnection = network.openConnection(url);          //openURLConnection();
+            InputStream in = uRLConnection.getInputStream();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int len = 0;
+            while ((len = in.read(buffer)) != -1) {
+                out.write(buffer, 0, len);
+            }
+            String a = new String(out.toByteArray());
+            out.close();
+            in.close();
+            showToast(a,context);
+        }catch (Exception e){
+            showToast(e.toString(),context);
+            e.toString();
+        }
     }
 }

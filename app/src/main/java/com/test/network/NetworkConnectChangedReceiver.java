@@ -26,26 +26,31 @@ public class NetworkConnectChangedReceiver extends BroadcastReceiver {
     public static final int TRUE = 1;
     public static final int FALSE = 0;
 
+    public static NetworkInfo activeNetwork;
+
     @Override
     public void onReceive(Context context, Intent intent) {
         // 这个监听wifi的打开与关闭，与wifi的连接无关
         if (WifiManager.WIFI_STATE_CHANGED_ACTION.equals(intent.getAction())) {
             int wifiState = intent.getIntExtra(WifiManager.EXTRA_WIFI_STATE, 0);
             switch (wifiState) {
+                //WIFI已禁用
                 case WifiManager.WIFI_STATE_DISABLED:
                     WIFISTATE = NetworkConstants.NETWORK_WIFI_STATE_DISABLED;
                     break;
+                //WIFI正在禁用
                 case WifiManager.WIFI_STATE_DISABLING:
                     WIFISTATE = NetworkConstants.NETWORK_WIFI_STATE_DISABLING;
                     break;
+                //WIFI正在启用
                 case WifiManager.WIFI_STATE_ENABLING:
-                    //WIFI正在打开
                     WIFISTATE = NetworkConstants.NETWORK_WIFI_STATE_ENABLING;
                     break;
+                //WIFI已启用
                 case WifiManager.WIFI_STATE_ENABLED:
-                    //WIFI已打开
                     WIFISTATE = NetworkConstants.NETWORK_WIFI_STATE_ENABLED;
                     break;
+                //WIFI状态未知
                 case WifiManager.WIFI_STATE_UNKNOWN:
                     WIFISTATE = NetworkConstants.NETWORK_WIFI_STATE_UNKNOWN;
                     break;
@@ -54,15 +59,21 @@ public class NetworkConnectChangedReceiver extends BroadcastReceiver {
             }
         }
 
+
+
+
+
         // 这个监听wifi的连接状态即是否连上了一个有效无线路由，当上边广播的状态是WifiManager
         // .WIFI_STATE_DISABLING，和WIFI_STATE_DISABLED的时候，根本不会接到这个广播。
-        // 在上边广播接到广播是WifiManager.WIFI_STATE_ENABLED状态的同时也会接到这个广播，
+        // 在上边广播接到广播是WifiManager.WIFI_STATE_ENABLED状态的同时会接到这个广播，
         // 当然刚打开wifi肯定还没有连接到有效的无线
         if (WifiManager.NETWORK_STATE_CHANGED_ACTION.equals(intent.getAction())) {
+            //获得网络状态数据
             Parcelable parcelableExtra = intent
                     .getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
             if (null != parcelableExtra) {
                 NetworkInfo networkInfo = (NetworkInfo) parcelableExtra;
+                //获取网络粗颗粒状态
                 NetworkInfo.State state = networkInfo.getState();
                 boolean isConnected = state == NetworkInfo.State.CONNECTED;// 当然，这边可以更精确的确定状态
 
@@ -83,7 +94,7 @@ public class NetworkConnectChangedReceiver extends BroadcastReceiver {
             ConnectivityManager manager = (ConnectivityManager) context
                     .getSystemService(Context.CONNECTIVITY_SERVICE);
 
-            NetworkInfo activeNetwork = manager.getActiveNetworkInfo();
+            activeNetwork = manager.getActiveNetworkInfo();
             if (activeNetwork != null) { // connected to the internet
                 if (activeNetwork.isConnected()) {
                     if (activeNetwork.getType() == ConnectivityManager.TYPE_WIFI) {
@@ -119,5 +130,8 @@ public class NetworkConnectChangedReceiver extends BroadcastReceiver {
     public interface NetEvevt {
         public void onNetChange(int netMobile);
     }
+
+
+
 
 }

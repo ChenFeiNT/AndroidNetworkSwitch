@@ -6,6 +6,8 @@
     android:layout_height="match_parent"
     tools:context="com.test.network.MainActivity">
 
+
+
     <Button
         android:id="@+id/button_use_4G"
         android:layout_width="336dp"
@@ -31,6 +33,66 @@
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintHorizontal_bias="0.513" />
 
+    <Button
+        android:id="@+id/button_app_4G"
+        android:layout_width="331dp"
+        android:layout_height="44dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_marginTop="132dp"
+        android:text="APP级4G切换"
+        app:layout_constraintHorizontal_bias="0.513"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button_use_4G" />
 
+    <Button
+        android:id="@+id/button_app_WIFI"
+        android:layout_width="331dp"
+        android:layout_height="44dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_marginTop="198dp"
+        android:text="APP级WIFI切换"
+        app:layout_constraintHorizontal_bias="0.513"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button_use_4G" />
+
+    <Button
+        android:id="@+id/button_request_outerUrl"
+        android:layout_width="331dp"
+        android:layout_height="44dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_marginTop="288dp"
+        android:text="访问外网"
+        app:layout_constraintHorizontal_bias="0.513"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button_use_4G" />
+
+    <Button
+        android:id="@+id/button_request_IntraUrl"
+        android:layout_width="331dp"
+        android:layout_height="44dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_marginTop="350dp"
+        android:text="访问内网"
+        app:layout_constraintHorizontal_bias="0.513"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/button_use_4G" />
+
+
+    <ProgressBar
+        android:id="@+id/pgb"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="invisible"
+        tools:layout_editor_absoluteY="121dp"
+        tools:layout_editor_absoluteX="168dp" />
 
 </android.support.constraint.ConstraintLayout>

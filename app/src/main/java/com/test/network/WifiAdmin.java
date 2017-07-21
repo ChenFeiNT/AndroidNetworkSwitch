@@ -1,12 +1,10 @@
 package com.test.network;
 
 import android.content.Context;
-import android.net.DhcpInfo;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
-import android.util.Log;
 
 import java.util.List;
 
@@ -72,7 +70,6 @@ public class WifiAdmin {
             mWifiLock.acquire();
         }
     }
-
     // 创建一个WifiLock
     public void creatWifiLock() {
         mWifiLock = mWifiManager.createWifiLock("Test");
@@ -150,6 +147,17 @@ public class WifiAdmin {
     public void addNetwork(WifiConfiguration wcg) {
         int wcgID = mWifiManager.addNetwork(wcg);
         boolean b =  mWifiManager.enableNetwork(wcgID, true);
+
+//        if (wcgID == -1) {
+//            Log.e("MainActivity", "操作失败,需要您到手机wifi列表中取消对设备连接的保存");
+//        } else {
+//            boolean enableNetwork = mWifiManager.enableNetwork(wcgID, true);
+//            if (!enableNetwork) {
+//                Log.e("MainActivity", "切换到指定wifi失败");
+//            } else {
+//                Log.e("MainActivity", "切换到指定wifi成功");
+//            }
+//        }
         System.out.println("a--" + wcgID);
         System.out.println("b--" + b);
     }
@@ -178,9 +186,10 @@ public class WifiAdmin {
 
         if(Type == 1) //WIFICIPHER_NOPASS
         {
-            config.wepKeys[0] = "";
+//            config.wepKeys[0] = "";
+//            config.wepTxKeyIndex = 0;
             config.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-            config.wepTxKeyIndex = 0;
+
         }
         if(Type == 2) //WIFICIPHER_WEP
         {
@@ -223,5 +232,12 @@ public class WifiAdmin {
         return null;
     }
 
+
 }
+
+
+//      连接指定WIFI
+//    WifiAdmin wifiAdmin = new WifiAdmin(this);
+//    wifiAdmin.openWifi();
+//    wifiAdmin.addNetwork(wifiAdmin.CreateWifiInfo("XXX", "XXX", 3));
 //分为三种情况：1没有密码2用wep加密3用wpa加密
