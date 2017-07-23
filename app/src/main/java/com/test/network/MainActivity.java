@@ -7,9 +7,11 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
@@ -27,8 +29,17 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     private ProgressBar pgb;
 
     Uri uri;
-    public static String outerUrl = "http://www.baidu.com/";
-    public static String IntraUrl = "http://10.30.30.88:8888/";
+
+    public static String outerUrl2 = "http://www.baidu.com/";
+    public String outerUrl = "http://php.weather.sina.com.cn/iframe/index/w_cl.php?code=js&day=0&city=&dfc=1&charset=utf-8";
+    public static String intraUrl = "http://10.30.30.88:8888/";
+
+    public static String testOuterHost = "www.baidu.com";
+    public static String testIntraHost = "192.168.0.1";
+
+    //定义当前网络状态
+    int netWorkStatus;
+
     long startTime;
     long currentTime;
     long mobileWaitingTime = 29999;
@@ -37,14 +48,17 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     // 权限检测器
     private PermissionsChecker mPermissionsChecker;
 
+    //使用handler时首先要创建一个handler
+    Handler handler = new Handler();
+
     //wifi管理对象
     WifiAdmin wifiAdmin;
     //网络监听实例
     NetworkConnectChangedReceiver networkConnectChangedReceiver;
 
     //wifiNAME
-    public static final String WIFINAME = "FIND7";
-    public static final String WIFIPASSWORD = "85860201";
+    public static final String WIFINAME = "1204";
+    public static final String WIFIPASSWORD = "852011101";
 
     // 所需的全部权限
     static final String[] PERMISSIONS = new String[]{
@@ -54,8 +68,6 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             Manifest.permission.CHANGE_WIFI_STATE,
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.INTERNET
-
-            //Manifest.permission.WRITE_SETTINGS,
     };
 
 
@@ -112,7 +124,7 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
                         })
                         .show();
             } else {
-                //申请读取图库权限
+                //申请读取network_change权限
                 ActivityCompat.requestPermissions(MainActivity.this,
                         new String[]{Manifest.permission.CHANGE_NETWORK_STATE},1);
             }
@@ -143,66 +155,55 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
         super.onPause();
     }
 
+    //权限请求的回调
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         mPermissionsChecker.onRequestPermissionsResult(requestCode,permissions,grantResults);
     }
 
+
+
+
     @Override
     public void onClick(View v) {
-
         switch (v.getId()) {
             //点击  使用4G 按钮
             case R.id.button_use_4G:
-                choose4G(v);
+                choose4G();
                 break;
             //点击  使用WIFI  按钮
             case R.id.button_use_WIFI:
-                chooseWifi(v);
+                chooseWifi();
                 break;
             case R.id.button_app_4G:
                //app切换4G访问
                 if(Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
-                    NetworkUtil.appUseMobileNetwork(this,outerUrl);
+                    NetworkUtil.setAppNetwork(this, NetworkCapabilities.TRANSPORT_CELLULAR);
                 }
                 break;
             case R.id.button_app_WIFI:
                 //app切换WIFI访问
                 if(Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
-                    NetworkUtil.appUseWifiNetwork(this,IntraUrl);
+                    NetworkUtil.setAppNetwork(this, NetworkCapabilities.TRANSPORT_WIFI);
                 }
                 break;
             case R.id.button_request_outerUrl:
                 //request 外网
                 new Thread(){
-                    @RequiresApi(api = Build.VERSION_CODES.M)
                     public void run(){
-                        //用netWork
-                        //NetworkUtil.requestWithNetwork(MainActivity.this);
                         //不用netWork
-                        NetworkUtil.executeHttpGet(MainActivity.this);
+                        NetworkUtil.requestWithoutNetwork(MainActivity.this,outerUrl);
                     }
                 }.start();
 
                 break;
             case R.id.button_request_IntraUrl:
-                if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-                    showToast("已连接指定WIFI");
-                }else{
-                    showToast("未连接指定WIFI");
-                }
-
-                //request 内网，暂时访问的是外网网址
-//                new Thread(){
-//                    @RequiresApi(api = Build.VERSION_CODES.M)
-//                    public void run(){
-//                        //用netWork
-//                        NetworkUtil.requestWithNetwork(MainActivity.this);
-//                        //不用netWork
-//                        //NetworkUtil.executeHttpGet(MainActivity.this);
-//                    }
-//                }.start();
-
+                new Thread(){
+                    public void run(){
+                        //不用netWork
+                        NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
+                    }
+                }.start();
                 break;
             default:
                 break;
@@ -213,113 +214,444 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     //选择4G的操作==================================================================================
     /**
      * 选择使用4G的方法
-     * @param v
      */
-    public void choose4G(View v){
-        int netWorkStatus = NetworkUtil.getNetWorkStatus(this);
-        //如果当前优先级为WIFI
-        if(netWorkStatus == NetworkConstants.NETWORK_WIFI){
-            //判断移动网络是否开启
-            if(NetworkUtil.isMobileEnabled(this)){
-                UseMobileAndMobileEnabled(v);
-            }else{
-                UseMobileAndMobileUnabled(v);
-            }
-        }else{
-            UseMobileAndIsMobile(v,netWorkStatus);
-        }
-    }
-    //当需使用4G且网络优先级为Mobile
-    public void UseMobileAndIsMobile(View v, int netWorkStatus){
-        switch (netWorkStatus){
-            case NetworkConstants.NETWORK_CLASS_2_G:
-                showToast("当前为2G网络，无法操作");
-                break;
-            case NetworkConstants.NETWORK_CLASS_3_G:
-                showToast("当前为3G网络，无法操作");
-                break;
-            case NetworkConstants.NETWORK_CLASS_4_G:
-                //直接跳转4G目标网络
-                uri = Uri.parse(outerUrl);
-                Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-                startActivity(intent);
-                break;
-            default:
-                UseMobileAndMobileUnabled(v);
-
-                break;
-        }
-    }
-
-    //当需使用4G,网络优先级为WIFI且移动网络未打开
-    public void UseMobileAndMobileUnabled(View v){
-        //判断当前版本
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP){
-            //andriod 5.0 （API 21）以下  可以通过代码打开移动网络
-            showToast("正在打开移动网络");
-            NetworkUtil.setMobileData(v.getContext(), true);
-
-            //消除打开移动网络的延迟
-            boolean isMobileEnabled = NetworkUtil.isMobileEnabled(this);
-            startTime = System.currentTimeMillis();
-            do{
-                pgb.setVisibility(View.VISIBLE);
-                currentTime = System.currentTimeMillis();
-                if(currentTime - startTime > mobileWaitingTime) {
-                    break;
+    public void choose4G(){
+        //判断是否能ping到百度
+        netWorkStatus = NetworkUtil.getNetWorkStatus(this);
+        if(NetworkUtil.ping(testOuterHost,1)){
+            //访问外网
+            new Thread(){
+                public void run(){
+                    //不用netWork
+                    NetworkUtil.requestWithoutNetwork(MainActivity.this,outerUrl);
                 }
-               isMobileEnabled = NetworkUtil.isMobileEnabled(this);
-            }while(!isMobileEnabled);
-            pgb.setVisibility(View.INVISIBLE);
+            }.start();
+        }else{
+            //判断当前网络状态
+            if(netWorkStatus == NetworkConstants.NETWORK_WIFI){
+                //当前网络为WIFI
+                UseMobileButIsWIFI();
+            }else if (netWorkStatus == NetworkConstants.NETWORK_CLASS_2_G
+                    || netWorkStatus == NetworkConstants.NETWORK_CLASS_3_G
+                    || netWorkStatus == NetworkConstants.NETWORK_CLASS_4_G){
+                //当前网络为移动
+                UseMobileAndIsMobile();
+            }else{
+                UseMobileButIsUnknow();
+            }
+        }
+    }
+
+    //访问外网，ping不通，网络状态为WIFI
+    public void UseMobileButIsWIFI(){
+        //判断移动网络是否打开
+        if(NetworkUtil.isMobileEnabled(this)){
+            //移动网络已打开
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                //5.0以下设置移动网络优先
+                setPreferredNetworkToMobile();
+                //判断当前网络状态
+                switch (netWorkStatus){
+                    case NetworkConstants.NETWORK_WIFI:
+                        showToast("提升网络优先级失败。");
+                        break;
+                    case NetworkConstants.NETWORK_CLASS_2_G:
+                        showToast("当前为2G网络，无法操作");
+                        break;
+                    case NetworkConstants.NETWORK_CLASS_3_G:
+                        showToast("当前为3G网络，无法操作");
+                        break;
+                    case NetworkConstants.NETWORK_CLASS_4_G:
+                        //访问目标网络
+                        new Thread(){
+                            public void run(){
+                                //不用netWork
+                                NetworkUtil.requestWithoutNetwork(MainActivity.this,outerUrl);
+                            }
+                        }.start();
+                        //访问完需将优先级还原
+                        break;
+                    default:
+                        showToast("服务器连接失败。");
+                        break;
+                }
+            } else {
+                //5.0以上设置应用级网络优先级 （network绑定为移动网络）
+                NetworkUtil.setAppNetwork(this,NetworkCapabilities.TRANSPORT_CELLULAR);
+                if(NetworkUtil.ping(testOuterHost,1)){
+                    //访问目标网络
+                    new Thread(){
+                        public void run(){
+                            //不用netWork
+                            NetworkUtil.requestWithoutNetwork(MainActivity.this,outerUrl);
+                        }
+                    }.start();
+                }else {
+                    showToast("服务器连接失败。");
+                }
+            }
+        }else {
+            //移动网络未打开,准备打开移动网络
+            readyTurnOnMobileData();
+        }
+    }
+
+    //访问外网，ping不通，网络状态为Mobile
+    public void UseMobileAndIsMobile(){
+        //判断版本
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            //5.0以下
+            showToast("服务器连接失败");
+        }else{
+            //5.0以上
+            //判断应用优先级
+            //设置移动网络为应用级网络优先级
+            NetworkUtil.setAppNetwork(this,NetworkCapabilities.TRANSPORT_CELLULAR);
+            if(NetworkUtil.ping(testOuterHost,1)){
+                //访问目标网络
+                new Thread(){
+                    public void run(){
+                        //不用netWork
+                        NetworkUtil.requestWithoutNetwork(MainActivity.this,outerUrl);
+                    }
+                }.start();
+            }else {
+                showToast("服务器连接失败。");
+            }
+        }
+    }
+
+    //访问外网，ping不通，网络状态为Unknow
+    public void UseMobileButIsUnknow(){
+        //判断移动网络是否打开
+        if(NetworkUtil.isMobileEnabled(this)){
+            showToast("服务器连接失败。");
+        }else{
+            //移动网络未打开,准备打开移动网络
+            readyTurnOnMobileData();
+        }
+    }
+
+    //移动网络未打开,准备打开移动网络
+    public void readyTurnOnMobileData(){
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            //5.0以下打开移动网络
+            turnOnMobileData();
 
             //判断移动网络是否开启
+            boolean isMobileEnabled = NetworkUtil.isMobileEnabled(this);
             if(isMobileEnabled){
-                UseMobileAndMobileEnabled(v);
+                //重新走一遍选择内网方法
+                choose4G();
             }else {
                 showToast("移动网络开启失败");
             }
-        }else{
+        } else {
             //andriod 5.0 （API 21）以上  通过代码打开移动网络需要系统权限，所以只能跳转到网络设置页面，手动打开
-            moveToNetworkSettings(v);
+            moveToNetworkSettings();
         }
     }
 
-    //当需使用4G,网络优先级为WIFI且移动网络已打开
-    public void UseMobileAndMobileEnabled(View v){
-        //判断当前版本
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP){
-            //andriod 5.0 （API 21）以下  使用切换网络优先级
-            showToast("网络切换中...");
-            NetworkUtil.setPreferredNetwork(v.getContext(), ConnectivityManager.TYPE_MOBILE);
+    //选择WIFI的操作==================================================================================
 
-            //循环消除延迟
-            int netWorkStatus = NetworkUtil.getNetWorkStatus(this);
-            startTime = System.currentTimeMillis();
-            do{
-                pgb.setVisibility(View.VISIBLE);
-                currentTime = System.currentTimeMillis();
-                if(currentTime - startTime > mobileWaitingTime) {
-                    break;
+    /**
+     * 选择使用wifi的方法
+     */
+    public void chooseWifi(){
+        //判断是否能ping到内网服务器
+        netWorkStatus = NetworkUtil.getNetWorkStatus(this);
+        if(NetworkUtil.ping(testIntraHost,1)){
+            //访问内网
+            new Thread(){
+                public void run(){
+                    //不用netWork
+                    NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
                 }
-                netWorkStatus = NetworkUtil.getNetWorkStatus(this);
-            }while(netWorkStatus != NetworkConstants.NETWORK_CLASS_2_G
-                    || netWorkStatus != NetworkConstants.NETWORK_CLASS_3_G
-                    || netWorkStatus != NetworkConstants.NETWORK_CLASS_4_G);
-
-            pgb.setVisibility(View.INVISIBLE);
-            //showToast(NetworkConnectChangedReceiver.activeNetwork.getExtraInfo());
-            //优先级为移动网络后的操作
-
-            UseMobileAndIsMobile(v,netWorkStatus);
-            //方法后需要重置网络优先级
+            }.start();
         }else{
-            //andriod 5.0 （API 21）以上  使用特殊方法访问外网
-            NetworkUtil.useMobileNetwork(this);
+            //判断当前网络状态
+            if(netWorkStatus == NetworkConstants.NETWORK_WIFI){
+                //当前网络为WIFI
+                UseWIFIAndIsWIFI();
+            }else if (netWorkStatus == NetworkConstants.NETWORK_CLASS_2_G
+                    || netWorkStatus == NetworkConstants.NETWORK_CLASS_3_G
+                    || netWorkStatus == NetworkConstants.NETWORK_CLASS_4_G){
+                //当前网络为移动
+                UseWIFIButIsMobile();
+            }else{
+                //当前网络未知
+                UseWIFIButIsUnknow();
+            }
         }
+    }
+
+    //访问内网，ping不通，网络状态为WIFI
+    public void  UseWIFIAndIsWIFI(){
+
+
+        //判断是否连接指定WIFI
+        if (NetworkUtil.isConnectedDesignatedWifi(this, WIFINAME)) {
+            //判断版本
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                //5.0以下，报错
+                showToast("连接服务器失败。");
+            } else {
+                //初始化应用网络优先级（解绑应用network）
+                initAppNetwork();
+            }
+        } else {
+            wifiAdmin = new WifiAdmin(this);
+            //连接到指定WIFI
+            notConnectedDesignatedWifi(wifiAdmin);
+        }
+    }
+
+    //初始化app network
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public void initAppNetwork(){
+        //初始化应用网络优先级（解绑应用network）
+        NetworkUtil.removeAppNetworkSetting(this);
+        //判断是否连接目标服务器（内网）
+        if(NetworkUtil.ping(testIntraHost,1)){
+            //访问内网
+            new Thread(){
+                public void run(){
+                    //不用netWork
+                    NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
+                }
+            }.start();
+        }else {
+            showToast("服务器连接失败。");
+        }
+    }
+
+    //访问内网，ping不通，网络状态为Mobile
+    public void UseWIFIButIsMobile(){
+        //判断WIFI是否开启
+        wifiAdmin = new WifiAdmin(this);
+        if(wifiAdmin.isWifiEnabled()){
+            //判断版本
+            if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP){
+                //5.0以下，提升WIFI为网络优先
+                setPreferredNetworkToWIFI();
+
+                //当前网络状态是否为WIFI
+                if (netWorkStatus == NetworkConstants.NETWORK_WIFI){
+                    //判断是否连接指定WIFI
+                    if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
+                        //判断是否连接目标服务器（内网）
+                        if(NetworkUtil.ping(intraUrl,1)){
+                            //访问内网
+                            new Thread(){
+                                public void run(){
+                                    //不用netWork
+                                    NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
+                                }
+                            }.start();
+                        }else {
+                            showToast("连接目标服务器失败。");
+                        }
+                    }else {
+                        //连接指定WIFI
+                        connectedDesignatedWifi( wifiAdmin);
+
+                        //是否连接指定WIFI
+                        if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
+                            //是否连接目标服务器（内网）
+                            if(NetworkUtil.ping(testIntraHost,1)) {
+                                //访问内网
+                                new Thread(){
+                                    public void run(){
+                                        //不用netWork
+                                        NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
+                                    }
+                                }.start();
+                            }else {
+                                showToast("服务器连接失败。");
+                            }
+                        }else {
+                            showToast("连接指定WIFI发生异常。");
+                        }
+                    }
+                }else{
+                    showToast("提升WIFI优先级失败。");
+                }
+            }else {
+                //5.0以上，判断是否连接指定wifi
+                if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
+                    //是否连接目标服务器（内网）
+                    if(NetworkUtil.ping(testIntraHost,1)){
+                        //为network绑定WIFI网络
+                        NetworkUtil.setAppNetwork(this,NetworkCapabilities.TRANSPORT_WIFI);
+                        //是否连接目标服务器 （内网）
+                        if (NetworkUtil.ping(testIntraHost,1)) {
+                            //访问内网
+                            new Thread(){
+                                public void run(){
+                                    //不用netWork
+                                    NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
+                                }
+                            }.start();
+                        }else {
+                            showToast("服务器连接失败。");
+                        }
+                    }else{
+                        showToast("服务器连接失败。");
+                    }
+                }else {
+                    showToast("连接指定WIFI发生异常。");
+                }
+            }
+        }else{
+
+            //没有打开WIFI，就先打开WIFI
+            notTurnOnWIFI(wifiAdmin);
+        }
+    }
+
+    //访问内网，ping不通，网络状态为WIFI
+    public void  UseWIFIButIsUnknow(){
+        wifiAdmin = new WifiAdmin(this);
+        //判断WIFI是否开启
+        if(wifiAdmin.isWifiEnabled()){
+            //判断是否连接指定WIFI
+            if (NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
+                showToast("服务器连接失败。");
+            }else{
+                //连接到指定WIFI
+                notConnectedDesignatedWifi(wifiAdmin);
+            }
+        }else {
+            //没有打开WIFI，就先打开WIFI
+            notTurnOnWIFI(wifiAdmin);
+        }
+    }
+
+    //没有打开WIFI后的操作
+    public void notTurnOnWIFI(WifiAdmin wifiAdmin){
+        //打开WIFI
+        turnOnWIFI(wifiAdmin);
+
+        //判断WIFI 是否打开
+        if(wifiAdmin.isWifiEnabled()){
+            //重新走一遍选择外网方法
+           chooseWifi();
+        }else {
+            showToast("打开WIFI失败。");
+        }
+    }
+
+    //没有连接指定WIFI后的操作
+    public void notConnectedDesignatedWifi(WifiAdmin wifiAdmin){
+        connectedDesignatedWifi(wifiAdmin);
+
+        //是否连接指定WIFI
+        if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
+            //是否连接目标服务器（内网）
+            if(NetworkUtil.ping(testIntraHost,1)){
+                //访问内网
+                new Thread(){
+                    public void run(){
+                        //不用netWork
+                        NetworkUtil.requestWithoutNetwork(MainActivity.this,intraUrl);
+                    }
+                }.start();
+            }else{
+                //判断版本
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+                    showToast("连接连接服务器失败。");
+                }else{
+                    //初始化应用网络优先级（解绑应用network）
+                    initAppNetwork();
+                }
+            }
+        }else {
+            showToast("连接指定WIFI发生异常。");
+        }
+    }
+
+    //设置网络优先级为Mobile
+    public void setPreferredNetworkToMobile(){
+        NetworkUtil.setPreferredNetwork(this, ConnectivityManager.TYPE_MOBILE);
+        //循环等待
+        startTime = System.currentTimeMillis();
+        do{
+            currentTime = System.currentTimeMillis();
+            if(currentTime - startTime > mobileWaitingTime) {
+                break;
+            }
+            netWorkStatus = NetworkUtil.getNetWorkStatus(this);
+        }while(netWorkStatus != NetworkConstants.NETWORK_CLASS_2_G
+                || netWorkStatus != NetworkConstants.NETWORK_CLASS_3_G
+                || netWorkStatus != NetworkConstants.NETWORK_CLASS_4_G);
+    }
+
+    //设置网络优先级为WIFI
+    public void setPreferredNetworkToWIFI() {
+        NetworkUtil.setPreferredNetwork(this, ConnectivityManager.TYPE_WIFI);
+        //循环等待
+        startTime = System.currentTimeMillis();
+        do {
+            currentTime = System.currentTimeMillis();
+            if (currentTime - startTime > mobileWaitingTime) {
+                break;
+            }
+            netWorkStatus = NetworkUtil.getNetWorkStatus(this);
+        } while (netWorkStatus != NetworkConstants.NETWORK_WIFI);
+    }
+
+    //打开移动网络
+    public void turnOnMobileData(){
+        NetworkUtil.setMobileData(this, true);
+
+        //消除打开移动网络的延迟
+        boolean isMobileEnabled = NetworkUtil.isMobileEnabled(this);
+        startTime = System.currentTimeMillis();
+        do{
+            currentTime = System.currentTimeMillis();
+            if(currentTime - startTime > mobileWaitingTime) {
+                break;
+            }
+            isMobileEnabled = NetworkUtil.isMobileEnabled(this);
+        }while(!isMobileEnabled);
+    }
+
+    //打开移动网络
+    public void turnOnWIFI(WifiAdmin wifiAdmin){
+        wifiAdmin.openWifi();
+
+        //消除开启wifi延迟
+        startTime = System.currentTimeMillis();
+        while(!wifiAdmin.isWifiEnabled()){
+            currentTime = System.currentTimeMillis();
+            if(currentTime - startTime > wifiWaitingTime) {
+                break;
+            }
+        }
+    }
+
+    //连接到指定WIFI
+    public void connectedDesignatedWifi(WifiAdmin wifiAdmin) {
+        //判断版本
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            //android 6 之前连接指定WIFI的方法
+            wifiAdmin.addNetwork(wifiAdmin.CreateWifiInfo(WIFINAME, WIFIPASSWORD, 3));
+        }else{
+            //android 6 之后连接指定WIFI的方法
+            wifiAdmin.addNetWorkAndConnectOnAndroidM(WIFINAME, WIFIPASSWORD,3);
+        }
+        //循环等待，消除延迟
+        startTime = System.currentTimeMillis();
+        do{
+            currentTime = System.currentTimeMillis();
+            if(currentTime - startTime > mobileWaitingTime) {
+                break;
+            }
+        }while(!NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME));
     }
 
     //是否跳转移动网络设置
-    public void moveToNetworkSettings(final View v) {
+    public void moveToNetworkSettings() {
         new AlertDialog.Builder(this).setTitle("是否前往打开移动网络？")
                 .setIcon(android.R.drawable.ic_dialog_info)
                 .setPositiveButton("确定", new DialogInterface.OnClickListener() {
@@ -332,152 +664,14 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
 //                        if(NetworkUtil.getMobileDataState(v.getContext(), null)){
 //                            useMobile(v);
 //                        }
-
                     }
                 })
                 .setNegativeButton("返回", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
                         // 点击“返回”后的操作,这里不设置没有任何操作
-
                     }
                 }).show();
-    }
-
-    //选择WIFI的操作==================================================================================
-
-    /**
-     * 选择使用wifi的方法
-     * @param v
-     */
-    public void chooseWifi(View v){
-        int netWorkStatus = NetworkUtil.getNetWorkStatus(this);
-        //如果当前优先级为WIFI
-        showToast(netWorkStatus+"");
-        if(netWorkStatus == NetworkConstants.NETWORK_WIFI){
-            UseWifiAndIsWifi(v);
-        }else{
-            //判断WIFI是否开启
-            if(wifiAdmin ==null){
-                wifiAdmin = new WifiAdmin(this);
-            }
-            if(wifiAdmin.isWifiEnabled()){
-                wifiIsEnabled(v,wifiAdmin);
-            }else{
-                wifiIsUnabled(v,wifiAdmin);
-            }
-        }
-
-    }
-
-    //当需使用WIFI,且网络优先级为WIFI
-    public void UseWifiAndIsWifi(View v){
-        //判断是否连接指定WIFI
-        if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-            isWiFiActive();
-        }else{
-            //连接指定WIFI
-            ConnectToDesignatedWifi(v);
-        }
-    }
-    //wifi已打开
-    public void wifiIsEnabled(View v, WifiAdmin wifiAdmin){
-        //判断当前版本
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP){
-            //andriod 5.0 （API 21）以下  提升WIFI 优先级
-            showToast("网络切换中");
-            NetworkUtil.setPreferredNetwork(v.getContext(), ConnectivityManager.TYPE_WIFI);
-
-            //循环消除延迟
-            int netWorkStatus = NetworkUtil.getNetWorkStatus(this);
-            startTime = System.currentTimeMillis();
-            do{
-                pgb.setVisibility(View.VISIBLE);
-                currentTime = System.currentTimeMillis();
-                if(currentTime - startTime > mobileWaitingTime) {
-                    break;
-                }
-                netWorkStatus = NetworkUtil.getNetWorkStatus(this);
-            }while(netWorkStatus != NetworkConstants.NETWORK_WIFI);
-            //showToast(NetworkConnectChangedReceiver.activeNetwork.getExtraInfo());
-            pgb.setVisibility(View.INVISIBLE);
-
-
-            //判断提升后的网络优先级
-            if(netWorkStatus == NetworkConstants.NETWORK_WIFI){
-                UseWifiAndIsWifi(v);
-            }else{
-                showToast("网络切换失败，请检查网络。。。");
-            }
-        }else{
-            //andriod 5.0 （API 21）以上  判断是否连接只当wifi
-            UseWifiAndIsWifi(v);
-        }
-    }
-
-    //wifi未打开
-    public void wifiIsUnabled(View v,WifiAdmin wifiAdmin){
-        //打开wifi
-        wifiAdmin.openWifi();
-
-        //消除开启wifi延迟
-        startTime = System.currentTimeMillis();
-        while(!wifiAdmin.isWifiEnabled()){
-            //等待
-            pgb.setVisibility(View.VISIBLE);
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > wifiWaitingTime) {
-                break;
-            }
-        }
-        pgb.setVisibility(View.INVISIBLE);
-        //showToast(NetworkConnectChangedReceiver.activeNetwork.getExtraInfo());
-        //判断WIFI是否被打开
-        if(wifiAdmin.isWifiEnabled()){
-            wifiIsEnabled(v,wifiAdmin);
-        }else{
-           showToast("WIFI打开失败。。。");
-        }
-    }
-
-
-    //连接指定WIFI的方法
-    public void ConnectToDesignatedWifi(View v){
-        if(wifiAdmin == null){
-            WifiAdmin wifiAdmin = new WifiAdmin(this);
-            wifiIsUnabled(v,wifiAdmin);
-        }
-        wifiAdmin.addNetwork(wifiAdmin.CreateWifiInfo(WIFINAME, WIFIPASSWORD, 3));
-
-        startTime = System.currentTimeMillis();
-        do{
-            pgb.setVisibility(View.VISIBLE);
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > wifiWaitingTime) {
-                break;
-            }
-        }while(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME));
-        pgb.setVisibility(View.INVISIBLE);
-
-        if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-            isWiFiActive();
-        }else{
-            showToast("连接指定WIFI失败。。。");
-        }
-    }
-
-
-    //判断是wifi否联通~
-    public void isWiFiActive(){
-        if (NetworkUtil.isWiFiActive(this)) {
-            //直接跳转wifi目标网络
-            uri = Uri.parse(IntraUrl);
-            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-            startActivity(intent);
-        } else {
-            //连接到指定WIFI
-            showToast("WIFI未连通。。。，请检查WIFI网络。。。");
-        }
     }
 
     //显示Toast

@@ -59,10 +59,6 @@ public class NetworkConnectChangedReceiver extends BroadcastReceiver {
             }
         }
 
-
-
-
-
         // 这个监听wifi的连接状态即是否连上了一个有效无线路由，当上边广播的状态是WifiManager
         // .WIFI_STATE_DISABLING，和WIFI_STATE_DISABLED的时候，根本不会接到这个广播。
         // 在上边广播接到广播是WifiManager.WIFI_STATE_ENABLED状态的同时会接到这个广播，
@@ -125,13 +121,8 @@ public class NetworkConnectChangedReceiver extends BroadcastReceiver {
         }
     }
 
-
     // 自定义接口
     public interface NetEvevt {
         public void onNetChange(int netMobile);
     }
-
-
-
-
 }

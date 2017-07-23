@@ -162,6 +162,30 @@ public class WifiAdmin {
         System.out.println("b--" + b);
     }
 
+
+    //6.0以后连接WIFI方法
+    public void addNetWorkAndConnectOnAndroidM(String ssid, String password, int Type) {
+        WifiConfiguration temp = isWifiConfigurationSaved(ssid);
+        if (temp != null){
+            mWifiManager.enableNetwork(temp.networkId, true);
+        }else{
+            addNetwork(CreateWifiInfo(ssid, password, Type));
+        }
+
+    }
+    private WifiConfiguration isWifiConfigurationSaved(String SSID) {
+        if (mWifiConfiguration == null) {
+            this.startScan();
+        }
+        for (WifiConfiguration temp : mWifiConfiguration) {
+            if (temp.SSID.equals("\"" + SSID + "\"")) {
+                return temp;
+            }
+        }
+        return null;
+    }
+
+
     // 断开指定ID的网络
     public void disconnectWifi(int netId) {
         mWifiManager.disableNetwork(netId);
