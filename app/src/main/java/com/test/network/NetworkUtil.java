@@ -191,8 +191,6 @@ public class NetworkUtil{
         return false;
     }
 
-
-
     //判断当前网络是否连接
     public static boolean isNetworkConnected(Context context) {
         ConnectivityManager connMgr = (ConnectivityManager)
@@ -200,7 +198,6 @@ public class NetworkUtil{
         NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
         return (networkInfo != null && networkInfo.isConnected());
     }
-
 
     /**
      * 判断能够连到目标主机
@@ -210,7 +207,7 @@ public class NetworkUtil{
      */
     public static boolean ping(String host, int pingCount) {
         Process process = null;
-        String command = "ping -c " + pingCount + " -w 10 " + host;
+        String command = "ping -c " + pingCount + " -w 1 " + host;
         boolean isSuccess = false;
         try {
             process = Runtime.getRuntime().exec(command);
@@ -234,9 +231,6 @@ public class NetworkUtil{
         }
         return isSuccess;
     }
-
-
-
 
     /**
      * 判断 移动网络 是否被打开
@@ -267,8 +261,6 @@ public class NetworkUtil{
             return false;
         }
     }
-
-
 
     /**
      * 5.0以上WIFI和4G同开，设置network并访问（请求级别）
@@ -322,7 +314,7 @@ public class NetworkUtil{
      * @param transport_type  设置network的连接种类（NetworkCapabilities.TRANSPORT_CELLULAR：移动网络，NetworkCapabilities.TRANSPORT_WIFI：WIFI）
      */
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public static void   setAppNetwork(final Context context, final int transport_type){
+    public static void setAppNetwork(final Context context, final int transport_type){
 
         final ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE);
         NetworkRequest request = new NetworkRequest.Builder()
@@ -351,12 +343,11 @@ public class NetworkUtil{
                 //connectivityManager.unregisterNetworkCallback(this);
             }
         });
-        showToast("未知错误",context);
     }
 
     //5.0以上取消app级network绑定网络设置
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public static void    removeAppNetworkSetting(final Context context){
+    public static void removeAppNetworkSetting(final Context context){
         final ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE);
         // 可以通过下面代码取消app绑定网络的设置
          if (Build.VERSION.SDK_INT >= 23) {
@@ -400,7 +391,7 @@ public class NetworkUtil{
             showToast(result,context);
 
         } catch (Exception e) {
-            showToast(e.toString(),context);
+            showToast("请求发生错误，请检查主机。",context);
             e.printStackTrace();
         } finally {
             if (connection != null) {
@@ -411,7 +402,7 @@ public class NetworkUtil{
                     in.close();
                 } catch (IOException e) {
                     e.printStackTrace();
-                    showToast(e.toString(),context);
+                    showToast(e.toString()+"请求发生错误，请检查主机。",context);
                 }
             }
         }

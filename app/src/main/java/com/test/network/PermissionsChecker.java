@@ -16,6 +16,7 @@ import java.util.List;
  * Created by wangchenlong on 16/1/26.
  */
 public class PermissionsChecker {
+
     public Activity activity;
     public final Context mContext;
     public PermissionsChecker(Context context) {
@@ -24,11 +25,7 @@ public class PermissionsChecker {
     List<String> mPermissionList = new ArrayList<>();
     public String[] permissions;
 
-
-
-    /**
-     * 判断权限申请
-     */
+     //判断权限申请
     public void judgePermission() {
         mPermissionList.clear();
         /**
@@ -50,7 +47,10 @@ public class PermissionsChecker {
         }
     }
 
-    boolean mShowRequestPermission = true;//用户是否禁止权限
+    //用户是否禁止权限
+    boolean mShowRequestPermission = true;
+
+    //用户选择完的回调
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         //super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {

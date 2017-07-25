@@ -162,7 +162,6 @@ public class WifiAdmin {
         System.out.println("b--" + b);
     }
 
-
     //6.0以后连接WIFI方法
     public void addNetWorkAndConnectOnAndroidM(String ssid, String password, int Type) {
         WifiConfiguration temp = isWifiConfigurationSaved(ssid);
@@ -173,6 +172,7 @@ public class WifiAdmin {
         }
 
     }
+
     private WifiConfiguration isWifiConfigurationSaved(String SSID) {
         if (mWifiConfiguration == null) {
             this.startScan();
@@ -193,8 +193,7 @@ public class WifiAdmin {
     }
 
     //然后是一个实际应用方法，只验证过没有密码的情况：
-    public WifiConfiguration CreateWifiInfo(String SSID, String Password, int Type)
-    {
+    public WifiConfiguration CreateWifiInfo(String SSID, String Password, int Type) {
         WifiConfiguration config = new WifiConfiguration();
         config.allowedAuthAlgorithms.clear();
         config.allowedGroupCiphers.clear();
@@ -243,8 +242,7 @@ public class WifiAdmin {
         return config;
     }
 
-    private WifiConfiguration IsExsits(String SSID)
-    {
+    private WifiConfiguration IsExsits(String SSID) {
         List<WifiConfiguration> existingConfigs = mWifiManager.getConfiguredNetworks();
         for (WifiConfiguration existingConfig : existingConfigs)
         {
