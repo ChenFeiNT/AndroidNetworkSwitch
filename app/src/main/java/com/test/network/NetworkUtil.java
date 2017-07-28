@@ -200,7 +200,7 @@ public class NetworkUtil{
     }
 
     /**
-     * 判断能够连到目标主机
+     * 判断能够连到目标主机（系统级判断）
      * @param host          主机
      * @param pingCount     ping的次数
      * @return
@@ -232,11 +232,8 @@ public class NetworkUtil{
         return isSuccess;
     }
 
-    /**
-     * 判断 移动网络 是否被打开
-     * @param context
-     * @return false 未打开 true 打开
-     */
+
+    //判断 移动网络 是否被打开
     public static boolean isMobileEnabled(Context context) {
         try {
             ConnectivityManager mConnectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -330,7 +327,7 @@ public class NetworkUtil{
                     connectivityManager.bindProcessToNetwork(network);
                 } else {
                     // 23后这个方法舍弃了
-                    ConnectivityManager.setProcessDefaultNetwork(network);
+                    connectivityManager.setProcessDefaultNetwork(network);
                 }
                 // 也可以在将来某个时间取消这个绑定网络的设置
                 // if (Build.VERSION.SDK_INT >= 23) {
@@ -353,59 +350,65 @@ public class NetworkUtil{
          if (Build.VERSION.SDK_INT >= 23) {
              connectivityManager.bindProcessToNetwork(null);
         } else {
-             ConnectivityManager.setProcessDefaultNetwork(null);
+             connectivityManager.setProcessDefaultNetwork(null);
         }
         // 只要一找到符合条件的网络就注销本callback
         // 你也可以自己进行定义注销的条件
         //connectivityManager.unregisterNetworkCallback(this);
     }
 
-    //显示Toast
-    public static void showToast(final String msg, final Context context){
-        new Thread(){
-            public void run(){
-                Looper.prepare();//给当前线程初始化Looper
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show();;//Toast初始化的时候会new Handler();无参构造默认获取当前线程的Looper，如果没有prepare过，则抛出题主描述的异常。上一句代码初始化过了，就不会出错。
-                Looper.loop();//这句执行，Toast排队show所依赖的Handler发出的消息就有人处理了，Toast就可以吐出来了。但是，这个Thread也阻塞这里了，因为loop()是个for (;;) ...
-            }
-        }.start();
-    }
-
     //不使用network访问网络
-    public static void requestWithoutNetwork(Context context,String strUrl) {
-        String result = null;
-        URL url = null;
-        HttpURLConnection connection = null;
-        InputStreamReader in = null;
-        try {
-            url = new URL(strUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            in = new InputStreamReader(connection.getInputStream());
-            BufferedReader bufferedReader = new BufferedReader(in);
-            StringBuffer strBuffer = new StringBuffer();
-            String line = null;
-            while ((line = bufferedReader.readLine()) != null) {
-                strBuffer.append(line);
-            }
-            result = strBuffer.toString();
-            showToast(result,context);
-
-        } catch (Exception e) {
-            showToast("请求发生错误，请检查主机。",context);
-            e.printStackTrace();
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-            if (in != null) {
+    public static void requestWithoutNetwork(final String strUrl,final HttpCallBackListener listener) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String result = null;
+                URL url = null;
+                HttpURLConnection connection = null;
+                InputStreamReader in = null;
                 try {
-                    in.close();
-                } catch (IOException e) {
+                    url = new URL(strUrl);
+                    connection = (HttpURLConnection) url.openConnection();
+
+//                    connection.setRequestMethod("GET");
+                    connection.setConnectTimeout(8000);
+                    connection.setReadTimeout(8000);
+//                    connection.setDoInput(true);
+//                    connection.setDoOutput(true);
+
+                    in = new InputStreamReader(connection.getInputStream());
+                    BufferedReader bufferedReader = new BufferedReader(in);
+                    StringBuffer strBuffer = new StringBuffer();
+                    String line = null;
+                    while ((line = bufferedReader.readLine()) != null) {
+                        strBuffer.append(line);
+                    }
+                    result = strBuffer.toString();
+
+                    if (listener != null) {
+                        //回调onSuccess方法
+                        listener.onSuccess(result);
+                    }
+                } catch (Exception e) {
                     e.printStackTrace();
-                    showToast(e.toString()+"请求发生错误，请检查主机。",context);
+                    if (listener != null) {
+                        //回调onError方法
+                        listener.onError(e);
+                    }
+                } finally {
+                    if (connection != null) {
+                        connection.disconnect();
+                    }
+                    if (in != null) {
+                        try {
+                            in.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
             }
-        }
+        }).start();
     }
 
     //使用network访问网络
@@ -431,5 +434,16 @@ public class NetworkUtil{
             showToast(e.toString(),context);
             e.toString();
         }
+    }
+
+    //显示Toast
+    public static void showToast(final String msg, final Context context){
+        new Thread(){
+            public void run(){
+                Looper.prepare();//给当前线程初始化Looper
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show();;//Toast初始化的时候会new Handler();无参构造默认获取当前线程的Looper，如果没有prepare过，则抛出题主描述的异常。上一句代码初始化过了，就不会出错。
+                Looper.loop();//这句执行，Toast排队show所依赖的Handler发出的消息就有人处理了，Toast就可以吐出来了。但是，这个Thread也阻塞这里了，因为loop()是个for (;;) ...
+            }
+        }.start();
     }
 }

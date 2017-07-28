@@ -16,7 +16,7 @@ public class WifiAdmin {
     // 定义WifiManager对象
     private WifiManager mWifiManager;
     // 定义WifiInfo对象
-    private WifiInfo mWifiInfo;
+    public WifiInfo mWifiInfo;
     // 扫描出的网络连接列表
     private List<ScanResult> mWifiList;
     // 网络连接列表
@@ -70,6 +70,7 @@ public class WifiAdmin {
             mWifiLock.acquire();
         }
     }
+
     // 创建一个WifiLock
     public void creatWifiLock() {
         mWifiLock = mWifiManager.createWifiLock("Test");
@@ -121,6 +122,11 @@ public class WifiAdmin {
     // 得到MAC地址
     public String getMacAddress() {
         return (mWifiInfo == null) ? "NULL" : mWifiInfo.getMacAddress();
+    }
+
+    // 得到接入点的SSID
+    public String getSSID() {
+        return (mWifiInfo == null) ? "NULL" : mWifiInfo.getSSID();
     }
 
     // 得到接入点的BSSID
