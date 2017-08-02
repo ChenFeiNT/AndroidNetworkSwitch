@@ -371,8 +371,8 @@ public class NetworkUtil{
                     connection = (HttpURLConnection) url.openConnection();
 
 //                    connection.setRequestMethod("GET");
-                    connection.setConnectTimeout(8000);
-                    connection.setReadTimeout(8000);
+                    connection.setConnectTimeout(5000);
+                    connection.setReadTimeout(5000);
 //                    connection.setDoInput(true);
 //                    connection.setDoOutput(true);
 

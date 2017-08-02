@@ -35,11 +35,13 @@
             </intent-filter>
         </activity>
         <!--注册网络监听广播-->
-        <receiver android:name=".NetworkConnectChangedReceiver" >
-            <intent-filter>
-                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
-            </intent-filter>
-        </receiver>
+        <!--<receiver android:name=".NetworkConnectChangedReceiver" >-->
+            <!--<intent-filter>-->
+                <!--<action android:name="android.NET.conn.CONNECTIVITY_CHANGE" />-->
+                <!--<action android:name="android.net.wifi.WIFI_STATE_CHANGED" />-->
+                <!--<action android:name="android.Net.wifi.STATE_CHANGE" />-->
+            <!--</intent-filter>-->
+        <!--</receiver>-->
 
     </application>
 

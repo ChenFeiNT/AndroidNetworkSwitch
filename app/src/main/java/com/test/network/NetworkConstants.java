@@ -14,7 +14,14 @@ public class NetworkConstants {
      * wifi net work
      */
     public static final int NETWORK_WIFI = 1;
-
+    /**
+     * "MOBILE" networks  Unabled
+     */
+    public static final int NETWORK_MOBILE_STATE_UNABLED = 20;
+    /**
+     * "MOBILE" networks  Enabled
+     */
+    public static final int NETWORK_MOBILE_STATE_ENABLED = 21;
     /**
      * "2G" networks
      */
@@ -54,5 +61,15 @@ public class NetworkConstants {
      * wifi net work UNKNOWN
      */
     public static final int NETWORK_WIFI_STATE_UNKNOWN = 14;
+
+    /**
+     * wifi isConnected
+     */
+    public static final int NETWORK_WIFI_STATE_ISCONNECTED = 15;
+
+    /**
+     * wifi UnConnected
+     */
+    public static final int NETWORK_WIFI_STATE_UNCONNECTED = 16;
 
 }

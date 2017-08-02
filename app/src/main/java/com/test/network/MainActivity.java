@@ -7,9 +7,12 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v7.app.AppCompatActivity;
@@ -18,10 +21,12 @@ import android.widget.Button;
 import android.widget.Toast;
 
 
-public class MainActivity extends AppCompatActivity  implements View.OnClickListener ,HttpCallBackListener{
+public class MainActivity extends AppCompatActivity  implements View.OnClickListener ,HttpCallBackListener {
 
     Button button_use_4G, button_use_WIFI, button_request_outerUrl, button_request_IntraUrl,button_app_4G,button_app_WIFI;
     public static boolean FLAG = false;
+    public static String NEED = "" ;
+    public static int HANDLE_MESSAGE ;
 
     //使用request请求外网百度返回 为“  ” ，改为 天气端口测试外网
     public String outerUrl3 = "http://10.30.100.67:8088/api/index.jsp";
@@ -54,8 +59,11 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     long startTime;
     long currentTime;
     long mobileWaitingTime = 29999;
-    long wifiWaitingTime = 25000;
 
+
+    Object lock = new Object();
+    //子线程
+    public Thread childThread ;
     //wifi管理对象
     WifiAdmin wifiAdmin;
     //网络监听实例
@@ -72,6 +80,7 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.INTERNET
     };
+
 
 
     @Override
@@ -134,16 +143,21 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
 //        } else {
 //
 //        }
+
     }
+
 
     //在onResume()方法注册网络监听
     @Override
     protected void onResume() {
         if (networkConnectChangedReceiver == null) {
-            networkConnectChangedReceiver = new NetworkConnectChangedReceiver();
+            networkConnectChangedReceiver = new NetworkConnectChangedReceiver(netWorkHandler);
         }
         IntentFilter filter = new IntentFilter();
         filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
+//        filter.addAction(WifiManager.RSSI_CHANGED_ACTION);
+        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        filter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
         registerReceiver(networkConnectChangedReceiver, filter);
         System.out.println("注册");
         super.onResume();
@@ -165,7 +179,59 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     }
 
 
+    //网络监听Handler
+    private Handler netWorkHandler = new Handler(){
 
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            //showToast(msg.what+"");
+//            if (childThread!=null) {
+//                showToast(childThread.getState() + "");
+//            }
+            switch (msg.what){
+                case NetworkConstants.NETWORK_MOBILE_STATE_ENABLED:
+                    if(NEED.equals("turnOnMobileData")
+                            && childThread.getState().equals(Thread.State.WAITING) ) {
+                        synchronized (lock) {
+                            lock.notify();
+                        }
+                    }
+                    //在这里写，防止系统设置后返回，在设置画面睡2.5秒，造成假死现象，影响用户体验
+                    if(NEED.equals("moveToNetworkSettings")
+                        && childThread.getState().equals(Thread.State.WAITING) ) {
+                        synchronized (lock) {
+                            lock.notify();
+                            if(NetworkUtil.isMobileEnabled(MainActivity.this)){
+                                try {
+                                    MainActivity.this.childThread.sleep(2500);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                                UseMobileButNot();
+                            }
+                        }
+                    }
+                    break;
+                case NetworkConstants.NETWORK_WIFI_STATE_ENABLED:
+                    if((NEED.equals("turnOnWIFI"))
+                            && childThread.getState().equals(Thread.State.WAITING) ) {
+                        synchronized (lock) {
+                            lock.notify();
+                        }
+                    }
+                    break;
+                case NetworkConstants.NETWORK_WIFI_STATE_ISCONNECTED:
+                    if((NEED.equals("connectedDesignatedWifi")||NEED.equals("setPreferredNetworkToWIFI") )
+                            && childThread.getState().equals(Thread.State.WAITING) ) {
+                        synchronized (lock) {
+                            lock.notify();
+                        }
+                    }
+                    break;
+            }
+        }
+    };
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -173,12 +239,10 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
         switch (v.getId()) {
             //点击  使用4G 按钮
             case R.id.button_use_4G:
-                //choose4G();
                 netIsConneted(0);
                 break;
             //点击  使用WIFI  按钮
             case R.id.button_use_WIFI:
-                //chooseWifi();
                 netIsConneted(1);
                 break;
             case R.id.button_app_4G:
@@ -196,24 +260,8 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             case R.id.button_request_outerUrl:
 //                //不用netWork，访问外网
                  request(outerUrl);
-//               isConnByHttp(outerUrl);
-//                showToast(testIntraHost);
                 break;
             case R.id.button_request_IntraUrl:
-                wifiAdmin = new WifiAdmin(this);
-                wifiAdmin.openWifi();
-
-                String a ;
-                startTime = System.currentTimeMillis();
-                do {
-                    a = wifiAdmin.mWifiInfo.getSSID();
-                    showToast(a);
-                    currentTime = System.currentTimeMillis();
-                    if(currentTime - startTime > 2000) {
-                        break;
-                    }
-                }while (a.equals("<unknown ssid>"));
-                //不用netWork,访问内网
                 request(intraUrl);
                 break;
             default:
@@ -222,21 +270,29 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     }
 
 
-    public boolean netIsConneted(int type){
-        switch (type){
-            case 0:
-                FLAG = false;
-                choose4G();
-                showToast(FLAG+"");
-                return FLAG;
-            case 1:
-                FLAG = false;
-                chooseWifi();
-                showToast(FLAG+"");
-                return FLAG;
-            default:
-                return false;
-        }
+    //抽出的总入口，0为外网，1为内网
+    public void netIsConneted(final int type){
+        //新建操作线程
+        childThread = new Thread(){
+            public void run() {
+                Looper.prepare();//给当前线程初始化Looper
+                switch (type) {
+                    case 0:
+                        FLAG = false;
+                        choose4G();
+                        showToast(FLAG + "");
+                       break;
+                    case 1:
+                        FLAG = false;
+                        chooseWifi();
+                        showToast(FLAG + "");
+                      break;
+                    default:
+                }
+                Looper.loop();//开始消息轮询
+            }
+        };
+        childThread.start();
     }
 
 
@@ -257,6 +313,7 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             }else{
                 //5.0以上  解绑应用network;防止与系统不一致，造成无法访问
                 NetworkUtil.removeAppNetworkSetting(this);
+                NetworkUtil.setAppNetwork(this,NetworkCapabilities.TRANSPORT_CELLULAR);
                 //请求目标网络
                 request(outerUrl);
             }
@@ -313,6 +370,7 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
             //5.0以下设置移动网络优先
             setPreferredNetworkToMobile();
+            netWorkStatus = NetworkUtil.getNetWorkStatus(this);
             //判断当前网络状态
             switch (netWorkStatus){
                 case NetworkConstants.NETWORK_WIFI:
@@ -337,15 +395,11 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             //先将network解绑，不然会导致设置移动网络延迟
             NetworkUtil.removeAppNetworkSetting(this);
             NetworkUtil.setAppNetwork(this,NetworkCapabilities.TRANSPORT_CELLULAR);
-
-            //等网络状态
-            //此方法要优化
-//            do{
-//                currentTime = System.currentTimeMillis();
-//                if(currentTime - startTime > 15000) {
-//                    break;
-//                }
-//            }while(true);
+            try {
+                this.childThread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             //请求目标网络
             request(outerUrl);
         }
@@ -373,35 +427,75 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
 
     //是否跳转移动网络设置
     public void moveToNetworkSettings() {
-        new AlertDialog.Builder(this).setTitle("是否前往打开移动网络？")
-                .setIcon(android.R.drawable.ic_dialog_info)
-                .setPositiveButton("确定", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        // 点击“确认”后的操作，跳转移动网络设置
-                        startActivityForResult(new Intent(android.provider.Settings.ACTION_DATA_ROAMING_SETTINGS),ACTION_DATA_ROAMING_SETTINGS);
-                        dialog.dismiss();
+        new Thread(new Runnable(){
+            @Override
+            public void run() {
+                Looper.prepare();//给当前线程初始化Looper
+                new AlertDialog.Builder(MainActivity.this).setTitle("是否前往打开移动网络？")
+                        .setIcon(android.R.drawable.ic_dialog_info)
+                        .setPositiveButton("确定", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                // 点击“确认”后的操作，跳转移动网络设置
+                                startActivityForResult(new Intent(android.provider.Settings.ACTION_DATA_ROAMING_SETTINGS),ACTION_DATA_ROAMING_SETTINGS);
+                                dialog.dismiss();
 
-                    }
-                })
-                .setNegativeButton("返回", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        // 点击“返回”后的操作,这里不设置没有任何操作
-                    }
-                }).show();
+                            }
+                        })
+                        .setNegativeButton("返回", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                // 点击“返回”后的操作,这里不设置没有任何操作
+                                if(NEED.equals("moveToNetworkSettings")
+                                        && childThread.getState().equals(Thread.State.WAITING) ) {
+                                    synchronized (lock) {
+                                        lock.notify();
+                                    }
+                                }
+                            }
+                        }).show();
+                Looper.loop();//开始消息轮询
+            }
+        }).start();
+
+        //线程等待点击结果
+        synchronized (lock) {
+            try {
+                NEED = "moveToNetworkSettings";
+                lock.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            //使用网络监听 给handler发送消息来notify()
+        }
     }
+
+
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if(requestCode == ACTION_DATA_ROAMING_SETTINGS ){
-            UseMobileButNot();
+//            if(NEED.equals("moveToNetworkSettings")
+//                    && childThread.getState().equals(Thread.State.WAITING) ) {
+//                synchronized (lock) {
+//                    lock.notify();
+//                    if(NetworkUtil.isMobileEnabled(this)){
+//                        try {
+//                            this.childThread.sleep(2000);
+//                        } catch (InterruptedException e) {
+//                            e.printStackTrace();
+//                        }
+//                        UseMobileButNot();
+//                    }
+//                }
+//            }
         }
     }
 
 
-        //选择WIFI的操作==================================================================================
+
+    //选择WIFI的操作==================================================================================
 
     /**
      * 选择使用wifi的方法
@@ -410,8 +504,7 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
         //判断是否能ping到内网服务器
         netWorkStatus = NetworkUtil.getNetWorkStatus(this);
         if(NetworkUtil.ping(testIntraHost,1)){
-            //访问内网
-            //不用netWork
+            //访问内网，不用netWork
             //判断版本
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
                 //5.0以下  访问
@@ -478,32 +571,25 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             //5.0以下，提升WIFI为网络优先
             setPreferredNetworkToWIFI();
 
+            netWorkStatus = NetworkUtil.getNetWorkStatus(this);
             //当前网络状态是否为WIFI
             if (netWorkStatus == NetworkConstants.NETWORK_WIFI){
                 //判断是否连接指定WIFI
                 if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-                    //等待WIFI连通
-                    waitWIFIConnected();
-                    if(NetworkUtil.isWiFiActive(this)){
-                        //请求目标网络
-                        request(intraUrl);
-                    }else{
-                        showToast("连接指定WIFI发生异常。");
+                    //5.0以前的手机反应较慢，再睡2秒，消除延迟
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
+                    request(intraUrl);
                 }else {
                     //连接指定WIFI
                     connectedDesignatedWifi( wifiAdmin);
 
                     //是否连接指定WIFI
                     if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-                        //等待WIFI连通
-                        waitWIFIConnected();
-                        if(NetworkUtil.isWiFiActive(this)){
-                            //请求目标网络
-                            request(intraUrl);
-                        }else{
-                            showToast("连接指定WIFI发生异常。");
-                        }
+                        request(intraUrl);
                     }else {
                         showToast("连接指定WIFI发生异常。");
                     }
@@ -523,27 +609,12 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
                 //请求目标网络
                 request(intraUrl);
             }else{
-                //会存在 代码打开WIFI，实际上没有连到指定WIFI，而穿过拦截条件进行访问的情况，sleep 1秒，貌似得到解决（需大量测试验证）
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
                 //连接指定WIFI
                 connectedDesignatedWifi( wifiAdmin);
 
                 //是否连接指定WIFI
                 if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-
-                    //等待连通WIFI
-                    waitWIFIConnected();
-                    if(NetworkUtil.isWiFiActive(this)){
-
-                        //请求目标网
-                        request(intraUrl);
-                    }else{
-                        showToast("连接指定WIFI发生异常。");
-                    }
+                    request(intraUrl);
                 }else {
                     showToast("连接指定WIFI发生异常。");
                 }
@@ -572,19 +643,12 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
 
         //是否连接指定WIFI
         if(NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME)){
-            waitWIFIConnected();
+            //waitWIFIConnected();
             //是否连接目标服务器（内网）
             if(NetworkUtil.ping(testIntraHost,1)){
-                //访问内网
-                //不用netWork
-                //等待连通WIFI
-
-                if(NetworkUtil.isWiFiActive(this)){
-                    //请求目标网
-                    request(intraUrl);
-                }else{
-                    showToast("连接指定WIFI发生异常3。");
-                }
+                //访问内网，不用netWork
+                //请求目标网
+                request(intraUrl);
             }else{
                 //判断版本
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -597,12 +661,12 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
                         //请求目标网
                         request(intraUrl);
                     }else{
-                        showToast("连接指定WIFI发生异常3。");
+                        showToast("连接指定WIFI发生异常。");
                     }
                 }
             }
         }else {
-            showToast("连接指定WIFI发生异常1。");
+            showToast("连接指定WIFI发生异常。");
         }
     }
 
@@ -618,33 +682,47 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
 
     //耗时操作========================================================================================
 
-    //打开移动网络
+    //打开移动网络 5.0以下使用的方法
     public void turnOnMobileData(){
         NetworkUtil.setMobileData(this, true);
 
-        //消除打开移动网络的延迟
-        boolean isMobileEnabled = NetworkUtil.isMobileEnabled(this);
-        startTime = System.currentTimeMillis();
-        do{
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > mobileWaitingTime) {
-                break;
+        //打开移动网络后线程等待
+        synchronized (lock) {
+            try {
+                NEED = "turnOnMobileData";
+                lock.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-            isMobileEnabled = NetworkUtil.isMobileEnabled(this);
-        }while(!isMobileEnabled);
+            //使用网络监听 给handler发送消息来notify()
+        }
+        //打开WIFI后有延迟，线程睡2秒
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     //打开WIFI
-    public void turnOnWIFI(WifiAdmin wifiAdmin){
+    public void turnOnWIFI(WifiAdmin wifiAdmin) {
         wifiAdmin.openWifi();
 
-        //消除开启wifi延迟
-        startTime = System.currentTimeMillis();
-        while(!wifiAdmin.isWifiEnabled()){
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > wifiWaitingTime) {
-                break;
+        //打开WIFI后线程等待
+        synchronized (lock) {
+            try {
+                NEED = "turnOnWIFI";
+                lock.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
+            //使用网络监听 给handler发送消息来notify()
+        }
+        //打开WIFI后有延迟，线程睡2秒
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
@@ -658,40 +736,32 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
             //android 6 之后连接指定WIFI的方法
             wifiAdmin.addNetWorkAndConnectOnAndroidM(WIFINAME, WIFIPASSWORD,3);
         }
-        //循环等待，消除延迟
-        startTime = System.currentTimeMillis();
-        do{
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > mobileWaitingTime) {
-                break;
+
+        synchronized (lock)
+        {
+            try {
+                NEED = "connectedDesignatedWifi";
+                lock.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        }while(!NetworkUtil.isConnectedDesignatedWifi(this,WIFINAME));
+            //使用网络监听 给handler发送消息来notify()
+        }
+
+        //连接到指定WIFI，线程睡1秒
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
-    //等待WIFI连通
-    public void waitWIFIConnected(){
-        startTime = System.currentTimeMillis();
-        do{
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > mobileWaitingTime) {
-                break;
-            }
-        }while(!NetworkUtil.isWiFiActive(this));
-
-        //上面的判断不够，即使满足条件也无法访问，多停几秒，等待网络
-        //此方法要优化
-        do{
-            currentTime = System.currentTimeMillis();
-            if(currentTime - startTime > 15000) {
-                break;
-            }
-        }while(true);
-    }
 
     //设置系统网络优先级为Mobile
     public void setPreferredNetworkToMobile(){
         NetworkUtil.setPreferredNetwork(this, ConnectivityManager.TYPE_MOBILE);
-        //循环等待
+        //循环等待，
+        // 不用监听的原因是，监听发送的消息无法控制顺序，因为此方法过后，还需其他监听消息作为判断依据
         startTime = System.currentTimeMillis();
         do{
             currentTime = System.currentTimeMillis();
@@ -702,12 +772,14 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
         }while(netWorkStatus != NetworkConstants.NETWORK_CLASS_2_G
                 || netWorkStatus != NetworkConstants.NETWORK_CLASS_3_G
                 || netWorkStatus != NetworkConstants.NETWORK_CLASS_4_G);
+
     }
 
     //设置系统网络优先级为WIFI
     public void setPreferredNetworkToWIFI() {
         NetworkUtil.setPreferredNetwork(this, ConnectivityManager.TYPE_WIFI);
         //循环等待
+        // 不用监听的原因是，监听发送的消息无法控制顺序，因为此方法过后，还需其他监听消息作为判断依据
         startTime = System.currentTimeMillis();
         do {
             currentTime = System.currentTimeMillis();
@@ -729,13 +801,12 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
         NetworkUtil.requestWithoutNetwork( Url, this);
     }
 
-
     //显示Toast
     public void showToast(final String msg){
         new Thread(){
             public void run(){
                 Looper.prepare();//给当前线程初始化Looper
-                Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();;//Toast初始化的时候会new Handler();无参构造默认获取当前线程的Looper，如果没有prepare过，则抛出题主描述的异常。上一句代码初始化过了，就不会出错。
+                Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_SHORT).show();;//Toast初始化的时候会new Handler();无参构造默认获取当前线程的Looper，如果没有prepare过，则抛出题主描述的异常。上一句代码初始化过了，就不会出错。
                 Looper.loop();//这句执行，Toast排队show所依赖的Handler发出的消息就有人处理了，Toast就可以吐出来了。但是，这个Thread也阻塞这里了，因为loop()是个for (;;) ...
             }
         }.start();
@@ -751,4 +822,5 @@ public class MainActivity extends AppCompatActivity  implements View.OnClickList
     public void onError(Exception e) {
         showToast(e.toString());
     }
+
 }
